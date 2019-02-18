@@ -1,51 +1,65 @@
 #include <Arduino.h>
+#include <UIPEthernet.h> // Used for Ethernet
 
-#include "UIPEthernet.h"
-#include "PubSubClient.h"
-
-#define CLIENT_ID       "UnoMQTT"
-#define INTERVAL        3000 // 3 sec delay between publishing
-#define DHTPIN          3
-#define DHTTYPE         DHT11
-
-uint8_t mac[6] = {0x00,0x01,0x02,0x03,0x04,0x05};
-
-EthernetClient ethClient;
-PubSubClient mqttClient;
-
-long previousMillis;
+// **** ETHERNET SETTING ****
+byte mac[] = { 0x90, 0xA2, 0xDA, 0x0D, 0x78, 0xEE  };                                       
+//IPAddress ip(192, 168, 1, 115);                        
+EthernetServer server(80);
 
 void setup() {
-  // setup serial communication
-  //Serial.begin(9600);
-  // setup ethernet communication using DHCP
-  if(Ethernet.begin(mac) == 0) {
-    //Serial.println(F("Ethernet configuration using DHCP failed"));
-    for(;;);
-  }
-  // setup mqtt client
-  mqttClient.setClient(ethClient);
-  mqttClient.setServer("192.168.0.2",1883);
-  //mqttClient.setServer("192.168.1.xxx",1883); //for using local broker
-  //mqttClient.setServer("broker.hivemq.com",1883);
-  //Serial.println(F("MQTT client configured"));
+  Serial.begin(115200);
 
-  // setup DHT sensor
-  previousMillis = millis();
-}
+  // start the Ethernet connection and the server:
+  Ethernet.begin(mac);
+  server.begin();
 
-
-void sendData() {
-  if(mqttClient.connect(CLIENT_ID)) {
-   mqttClient.publish("nano/millis", millis());
- }
+  Serial.print("IP Address: ");
+  Serial.println(Ethernet.localIP());
 }
 
 void loop() {
-  // check interval
-  if(millis() - previousMillis > INTERVAL) {
-    sendData();
-    previousMillis = millis();
+  // listen for incoming clients
+  EthernetClient client = server.available();
+
+  if (client) 
+  {  
+    Serial.println("-> New Connection");
+
+    // an http request ends with a blank line
+    boolean currentLineIsBlank = true;
+
+    while (client.connected()) 
+    {
+      if (client.available()) 
+      {
+        char c = client.read();
+
+        // if you've gotten to the end of the line (received a newline
+        // character) and the line is blank, the http request has ended,
+        // so you can send a reply
+        if (c == '\n' && currentLineIsBlank) 
+        {
+          client.println("<html><title>Hello World!</title><body><h3>Hello World!</h3></body>");
+          break;
+        }
+
+        if (c == '\n') {
+          // you're starting a new line
+          currentLineIsBlank = true;
+        }
+        else if (c != '\r') 
+        {
+          // you've gotten a character on the current line
+          currentLineIsBlank = false;
+        }
+      } 
+    }
+
+    // give the web browser time to receive the data
+    delay(10);
+
+    // close the connection:
+    client.stop();
+    Serial.println("   Disconnected\n");
   }
-  mqttClient.loop();
 }
